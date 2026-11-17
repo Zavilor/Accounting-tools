@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { cruzar, esPortal } from '../lib/cruce';
+import { cruzar, tipoArchivo } from '../lib/cruce';
 
 const plata = n => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -13,6 +13,7 @@ function descargar(buffer, nombre) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 const marcado = nombre => nombre.replace(/\.xlsx$/i, '') + '_MARCADO.xlsx';
+const MOSTRAR_FOTO = false; // temporal: foto oculta
 
 export default function Pagina() {
   const [archivos, setArchivos] = useState({ bis: null, portal: null });
@@ -30,12 +31,14 @@ export default function Pagina() {
     const nuevos = { ...archivos };
     for (const f of xlsx.slice(0, 2)) {
       const buf = await f.arrayBuffer();
+      let tipo;
       try {
-        const portal = await esPortal(ExcelJS, buf);
-        nuevos[portal ? 'portal' : 'bis'] = { nombre: f.name, buf };
+        tipo = await tipoArchivo(ExcelJS, buf);
       } catch {
         setError(`No pude abrir ${f.name}. Revisá que sea un Excel válido.`); return;
       }
+      if (!tipo) { setError(`No reconozco ${f.name}. Tiene que ser la planilla Compras Bis, Mis Comprobantes de ARCA o el Portal IVA Compras.`); return; }
+      nuevos[tipo === 'portal' ? 'portal' : 'bis'] = { nombre: f.name, buf };
     }
     setArchivos(nuevos);
   }, [archivos]);
@@ -76,6 +79,7 @@ export default function Pagina() {
           <p className="bajada">Compará la planilla Compras Bis con el Portal IVA Compras y descargá los dos Excel marcados con lo que no coincide.</p>
           <p className="privado"><IconoCandado /> Todo se procesa en tu computadora. Nada se sube a ningún lado.</p>
         </div>
+        {MOSTRAR_FOTO && (
         <figure className="polaroid" tabIndex={0}>
           <img src="/juan-y-maia.jpg" alt="Juan y Maia" width="212" height="236" />
           <figcaption>
@@ -83,6 +87,7 @@ export default function Pagina() {
             <span className="polaroid__mensaje">juntos, somos<br />mucho más lindos<br /><b>te amo hermosa</b></span>
           </figcaption>
         </figure>
+        )}
       </section>
 
       <section
@@ -101,7 +106,7 @@ export default function Pagina() {
         </div>
         <input ref={input} type="file" accept=".xlsx" multiple hidden onChange={e => { recibir(e.target.files); e.target.value = ''; }} />
         <div className="ranuras">
-          <Ranura paso={1} titulo="Compras Bis" archivo={archivos.bis} />
+          <Ranura paso={1} titulo="Compras Bis o Mis Comprobantes" archivo={archivos.bis} />
           <Ranura paso={2} titulo="Portal IVA Compras" archivo={archivos.portal} />
         </div>
       </section>

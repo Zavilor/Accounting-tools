@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { cruzar, tipoArchivo } from '../lib/cruce';
+import { cruzar, infoArchivo, asignarLados } from '../lib/cruce';
 
 const plata = n => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -28,18 +28,25 @@ export default function Pagina() {
     const xlsx = [...lista].filter(f => /\.xlsx$/i.test(f.name));
     if (!xlsx.length) { setError('Soltá archivos .xlsx. Si vienen en .xls, abrilos en Excel y guardalos como .xlsx.'); return; }
     const ExcelJS = (await import('exceljs')).default;
-    const nuevos = { ...archivos };
+    const leidos = [];
     for (const f of xlsx.slice(0, 2)) {
       const buf = await f.arrayBuffer();
-      let tipo;
+      let info;
       try {
-        tipo = await tipoArchivo(ExcelJS, buf);
+        info = await infoArchivo(ExcelJS, buf);
       } catch {
         setError(`No pude abrir ${f.name}. Revisá que sea un Excel válido.`); return;
       }
-      if (!tipo) { setError(`No reconozco ${f.name}. Tiene que ser la planilla Compras Bis, Mis Comprobantes de ARCA o el Portal IVA Compras.`); return; }
-      nuevos[tipo === 'portal' ? 'portal' : 'bis'] = { nombre: f.name, buf };
+      if (!info.ok) { setError(`No reconozco las columnas de ${f.name}. Necesito fecha, tipo de comprobante, número, CUIT y total.`); return; }
+      leidos.push({ nombre: f.name, buf, planilla: info.planilla });
     }
+    let lados;
+    try {
+      lados = asignarLados(leidos);
+    } catch (e) { setError(e.message); return; }
+    // con dos archivos se reemplazan los dos; con uno, solo la ranura que le toca
+    const nuevos = leidos.length === 2 ? { bis: null, portal: null } : { ...archivos };
+    for (const [lado, f] of Object.entries(lados)) nuevos[lado] = { nombre: f.nombre, buf: f.buf };
     setArchivos(nuevos);
   }, [archivos]);
 
